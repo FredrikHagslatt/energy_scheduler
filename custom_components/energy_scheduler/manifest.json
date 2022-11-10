@@ -1,7 +1,7 @@
 {
     "domain": "energy_scheduler",
     "name": "Energy Scheduler",
-    "integration_type": "helper",
+    "integration_type": "sensor",
     "documentation": "https://www.example.com",
     "dependencies": [],
     "version": "1.0.0",
