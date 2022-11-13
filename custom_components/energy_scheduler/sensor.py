@@ -56,7 +56,9 @@ class EnergyScheduler(SensorEntity):
 
     def get_nordpool_raw_today(self):
         nordpool_raw_today = self.hass.data["nordpool"]._data['SEK']['today']['SE3']['values']
-        return nordpool_raw_today
+        # Every element is a reference and needs to de copied individually to not interfere with the Nordpool integration
+        copied_list = [element.copy() for element in nordpool_raw_today]
+        return copied_list.copy()
 
 
     def rank_hours_after_price(self, today):
