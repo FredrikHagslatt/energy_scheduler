@@ -16,6 +16,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
@@ -30,6 +31,7 @@ class EnergyScheduler(SensorEntity):
     _attr_name = "Energy Scheduler"
     _attr_native_unit_of_measurement = TEMP_CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
+    #_attr_device_class = SensorDeviceClass.ENUM
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, hass, config):
@@ -43,9 +45,17 @@ class EnergyScheduler(SensorEntity):
         self.raw_today = []
 
     def read_config(self, config):
-        conf_dict = {'hours_off': config.get("hours_off", 4)}
-        return conf_dict
+        hours_off = config.get("hours_off", 6)
+        scheduler_mode = config.get('scheduler_mode', 'default')
 
+        scheduler_modes = {'default', 'extreme'}
+        if not scheduler_mode in scheduler_modes:
+            scheduler_mode = 'default'
+
+        conf_dict = {'hours_off': hours_off,
+                     'scheduler_mode': scheduler_mode}
+
+        return conf_dict
 
     def set_mode(self, mode):
         modes = {'Off': 0, 'On': 1}
@@ -53,13 +63,11 @@ class EnergyScheduler(SensorEntity):
         self.now_value = modes[mode]
         self._attr_native_value = self.now_value
 
-
     def get_nordpool_raw_today(self):
         nordpool_raw_today = self.hass.data["nordpool"]._data['SEK']['today']['SE3']['values']
         # Every element is a reference and needs to de copied individually to not interfere with the Nordpool integration
         copied_list = [element.copy() for element in nordpool_raw_today]
         return copied_list.copy()
-
 
     def rank_hours_after_price(self, today):
         today_with_hours = [(i, today[i]) for i in range(len(today))]
@@ -70,6 +78,19 @@ class EnergyScheduler(SensorEntity):
             ranked_hours[sorted_today_with_hours[i][0]] = i
         return ranked_hours
 
+    def calculate_default_mode(self, ranked_hours):
+        today = []
+        for rank in ranked_hours:
+            if self.config["hours_off"] > rank:
+                mode = 0
+            else:
+                mode = 1
+            today.append(mode)
+        return today
+
+    def calculate_extreme_mode(self, ranked_hours):
+        today = []
+        return today
 
     def update(self) -> None:
         logger.info("Updating sensor")
@@ -79,14 +100,10 @@ class EnergyScheduler(SensorEntity):
 
         ranked_hours = self.rank_hours_after_price(nordpool_today)
 
-        today = []
-        for rank in ranked_hours:
-            if self.config["hours_off"] > rank:
-                mode = 0
-            else:
-                mode = 1
-            today.append(mode)
-        self.today = today
+        if self.config['scheduler_mode'] == 'default':
+            self.today = self.calculate_default_mode(ranked_hours)
+        elif self.config['scheduler_mode'] == 'extreme':
+            self.today = self.calculate_extreme_mode(ranked_hours)
 
         this_hour = int(datetime.now().strftime("%H"))
         if self.config["hours_off"] > ranked_hours[this_hour]:
@@ -97,7 +114,7 @@ class EnergyScheduler(SensorEntity):
         raw_today = nordpool_raw_today
 
         for i in range(len(raw_today)):
-            raw_today[i]['value'] = today[i]
+            raw_today[i]['value'] = self.today[i]
         self.raw_today = raw_today
 
     @property
