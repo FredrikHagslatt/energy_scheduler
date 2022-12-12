@@ -185,5 +185,5 @@ class EnergyScheduler(SensorEntity):
             "today": self.today,
             "tomorrow": self.tomorrow,
             "raw_today": self.raw_today,
-            "raw_today": self.raw_tomorrow
+            "raw_tomorrow": self.raw_tomorrow
         }
