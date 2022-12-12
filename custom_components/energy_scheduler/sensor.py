@@ -42,7 +42,9 @@ class EnergyScheduler(SensorEntity):
         self.now_value = 0
         self.now = 'Off'
         self.today = []
+        self.tomorrow = []
         self.raw_today = []
+        self.raw_tomorrow = []
 
     def read_config(self, config):
         scheduler = config.get('scheduler', 'auto')
@@ -88,11 +90,15 @@ class EnergyScheduler(SensorEntity):
         self.now_value = modes[mode]
         self._attr_native_value = self.now_value
 
-    def get_nordpool_raw_today(self):
+    def get_nordpool_raw(self):
         nordpool_raw_today = self.hass.data["nordpool"]._data['SEK']['today']['SE3']['values']
+        nordpool_raw_tomorrow = self.hass.data["nordpool"]._data['SEK']['tomorrow']['SE3']['values']
+
         # Every element is a reference and needs to de copied individually to not interfere with the Nordpool integration
-        copied_list = [element.copy() for element in nordpool_raw_today]
-        return copied_list.copy()
+        today = [element.copy() for element in nordpool_raw_today]
+        tomorrow = [element.copy() for element in nordpool_raw_tomorrow]
+
+        return today, tomorrow
 
     def rank_hours_after_price(self, today):
         today_with_hours = [(i, today[i]) for i in range(len(today))]
@@ -133,21 +139,27 @@ class EnergyScheduler(SensorEntity):
     def update(self) -> None:
         logger.info('Updating sensor')
 
-        nordpool_raw_today = self.get_nordpool_raw_today()
+        nordpool_raw_today, nordpool_raw_tomorrow = self.get_nordpool_raw()
         nordpool_today = [hour['value'] for hour in nordpool_raw_today]
-        ranked_hours = self.rank_hours_after_price(nordpool_today)
+        nordpool_tomorrow = [hour['value'] for hour in nordpool_raw_tomorrow]
+        ranked_hours_today = self.rank_hours_after_price(nordpool_today)
+        ranked_hours_tomorrow = self.rank_hours_after_price(nordpool_tomorrow)
 
         if self.config.get('scheduler') == 'auto':
-            self.today = self.calculate_auto_mode(ranked_hours)
+            self.today = self.calculate_auto_mode(ranked_hours_today)
+            self.tomorrow = self.calculate_auto_mode(ranked_hours_tomorrow)
 
         elif self.config.get('scheduler') == 'manual':
             self.today = self.calculate_manual_mode()
+            self.tomorrow = self.today
 
         elif self.config.get('scheduler') == 'always_on':
             self.today = [1] * 24
+            self.tomorrow = self.today
 
         elif self.config.get('scheduler') == 'always_off':
             self.today = [0] * 24
+            self.tomorrow = self.today
 
         this_hour = int(datetime.now().strftime("%H"))
         if self.today[this_hour]:
@@ -160,11 +172,18 @@ class EnergyScheduler(SensorEntity):
             raw_today[i]['value'] = self.today[i]
         self.raw_today = raw_today
 
+        raw_tomorrow = nordpool_raw_tomorrow
+        for i in range(len(raw_tomorrow)):
+            raw_tomorrow[i]['value'] = self.tomorrow[i]
+        self.raw_tomorrow = raw_tomorrow
+
     @property
     def extra_state_attributes(self) -> dict:
         return {
             "now": self.now,
             "now_value": self.now_value,
             "today": self.today,
-            "raw_today": self.raw_today
+            "tomorrow": self.tomorrow,
+            "raw_today": self.raw_today,
+            "raw_today": self.raw_tomorrow
         }
