@@ -31,7 +31,7 @@ class EnergyScheduler(SensorEntity):
     _attr_name = "Energy Scheduler"
     _attr_native_unit_of_measurement = TEMP_CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
-    #_attr_device_class = SensorDeviceClass.ENUM
+    # _attr_device_class = SensorDeviceClass.ENUM
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, hass, config):
@@ -45,6 +45,7 @@ class EnergyScheduler(SensorEntity):
         self.tomorrow = []
         self.raw_today = []
         self.raw_tomorrow = []
+        self.tomorrow_valid = False
 
     def read_config(self, config):
         scheduler = config.get('scheduler', 'auto')
@@ -90,15 +91,27 @@ class EnergyScheduler(SensorEntity):
         self.now_value = modes[mode]
         self._attr_native_value = self.now_value
 
+    def get_nordpool_entity_id(self):
+        for ids in self.hass.states.entity_ids():
+            if 'sensor.nordpool' in ids:
+                return ids
+        return None
+
     def get_nordpool_raw(self):
-        nordpool_raw_today = self.hass.data["nordpool"]._data['SEK']['today']['SE3']['values']
-        nordpool_raw_tomorrow = self.hass.data["nordpool"]._data['SEK']['tomorrow']['SE3']['values']
+        nordpool_entity_id = self.get_nordpool_entity_id()
+        nordpool_attributes = self.hass.states.get(
+            nordpool_entity_id).attributes
+
+        nordpool_tomorrow_valid = nordpool_attributes["tomorrow_valid"]
+        nordpool_raw_today = nordpool_attributes["raw_today"]
+        nordpool_raw_tomorrow = nordpool_attributes["raw_tomorrow"]
 
         # Every element is a reference and needs to de copied individually to not interfere with the Nordpool integration
         today = [element.copy() for element in nordpool_raw_today]
         tomorrow = [element.copy() for element in nordpool_raw_tomorrow]
+        tomorrow_valid = nordpool_tomorrow_valid
 
-        return today, tomorrow
+        return today, tomorrow, tomorrow_valid
 
     def rank_hours_after_price(self, today):
         today_with_hours = [(i, today[i]) for i in range(len(today))]
@@ -139,19 +152,29 @@ class EnergyScheduler(SensorEntity):
     def update(self) -> None:
         logger.info('Updating sensor')
 
-        nordpool_raw_today, nordpool_raw_tomorrow = self.get_nordpool_raw()
+        nordpool_raw_today, nordpool_raw_tomorrow, self.tomorrow_valid = self.get_nordpool_raw()
         nordpool_today = [hour['value'] for hour in nordpool_raw_today]
         nordpool_tomorrow = [hour['value'] for hour in nordpool_raw_tomorrow]
+
         ranked_hours_today = self.rank_hours_after_price(nordpool_today)
-        ranked_hours_tomorrow = self.rank_hours_after_price(nordpool_tomorrow)
+
+        if self.tomorrow_valid:
+            ranked_hours_tomorrow = self.rank_hours_after_price(
+                nordpool_tomorrow)
 
         if self.config.get('scheduler') == 'auto':
             self.today = self.calculate_auto_mode(ranked_hours_today)
-            self.tomorrow = self.calculate_auto_mode(ranked_hours_tomorrow)
+            if self.tomorrow_valid:
+                self.tomorrow = self.calculate_auto_mode(ranked_hours_tomorrow)
+            else:
+                self.tomorrow = [0] * 24
 
         elif self.config.get('scheduler') == 'manual':
             self.today = self.calculate_manual_mode()
-            self.tomorrow = self.today
+            if self.tomorrow_valid:
+                self.tomorrow = self.today
+            else:
+                self.tomorrow = [0] * 24
 
         elif self.config.get('scheduler') == 'always_on':
             self.today = [1] * 24
@@ -177,7 +200,7 @@ class EnergyScheduler(SensorEntity):
             raw_tomorrow[i]['value'] = self.tomorrow[i]
         self.raw_tomorrow = raw_tomorrow
 
-    @property
+    @ property
     def extra_state_attributes(self) -> dict:
         return {
             "now": self.now,
@@ -185,5 +208,6 @@ class EnergyScheduler(SensorEntity):
             "today": self.today,
             "tomorrow": self.tomorrow,
             "raw_today": self.raw_today,
-            "raw_tomorrow": self.raw_tomorrow
+            "raw_tomorrow": self.raw_tomorrow,
+            "tomorrow_valid": self.tomorrow_valid
         }
