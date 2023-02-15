@@ -12,6 +12,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from datetime import datetime
+from .misc_entities import EnergyDailyInit
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ def setup_platform(
 ) -> None:
     """Set up the sensor platform."""
     add_entities([EnergyScheduler(hass, config)])
+    add_entities([EnergyDailyInit(hass)])
 
 
 class EnergyScheduler(SensorEntity):
