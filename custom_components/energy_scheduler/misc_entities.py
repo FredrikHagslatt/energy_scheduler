@@ -21,6 +21,14 @@ class EnergyDailyInit(SensorEntity):
         self.last_update_date = datetime(1970, 1, 1).date()
         self._attr_native_value = 0
 
+        # Attempt to restore the previous value upon initialization
+        last_state = self.hass.states.get('sensor.energy_daily_init')
+        if last_state and last_state.state != 'unknown':
+            parts = last_state.state.split(',')
+            if len(parts) == 2:
+                self.last_update_date = datetime.strptime(parts[0], '%Y-%m-%d').date()
+                self._attr_native_value = float(parts[1])
+
     def get_energy(self):
         entity_id = 'sensor.develco_zhemi101_summation_delivered'
         entity = self.hass.states.get(entity_id)
@@ -38,3 +46,9 @@ class EnergyDailyInit(SensorEntity):
             self._attr_native_value = self.get_energy()
             self.last_update_date = today
 
+            # Store the value and last_update_date persistently
+            value_to_store = f"{self.last_update_date.strftime('%Y-%m-%d')},{self._attr_native_value}"
+            self.hass.services.call('persistent_notification', 'create', {
+                'title': 'Energy Daily Init',
+                'message': value_to_store
+            })
