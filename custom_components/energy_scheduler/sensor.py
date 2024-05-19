@@ -12,7 +12,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from datetime import datetime
-from .misc_entities import EnergyDailyInit
 
 import logging
 
@@ -27,14 +26,12 @@ def setup_platform(
 ) -> None:
     """Set up the sensor platform."""
     add_entities([EnergyScheduler(hass, config)])
-    add_entities([EnergyDailyInit(hass)])
 
 
 class EnergyScheduler(SensorEntity):
     _attr_name = "Energy Scheduler"
     _attr_native_unit_of_measurement = TEMP_CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
-    # _attr_device_class = SensorDeviceClass.ENUM
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, hass, config):
