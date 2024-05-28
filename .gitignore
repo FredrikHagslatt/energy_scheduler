@@ -1,1 +1,15 @@
+home-assistant.log*
+configuration.yaml
+.storage
+.HA_VERSION
+deps
 __pycache__
+hacs
+.storage
+.pytest_cache
+blueprints
+deps
+tts
+home-assistant_v2.db*
+
+custom_components/mock_nordpool/
